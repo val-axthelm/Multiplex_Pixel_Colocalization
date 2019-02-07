@@ -13,7 +13,7 @@
 	</parent>
 
 	<groupId>com.mycompany</groupId>
-	<artifactId>Process_Pixels</artifactId>
+	<artifactId>Multiplex_Pixel_Colocalization</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
 
 	<name>Process Pixels</name>
@@ -101,7 +101,7 @@
 
 	<properties>
 		<package-name>com.mycompany.imagej</package-name>
-		<main-class>com.mycompany.imagej.Process_Pixels</main-class>
+		<main-class>com.mycompany.imagej.Multiplex_Pixel_Colocalization</main-class>
 		<license.licenseName>bsd_2</license.licenseName>
 		<license.copyrightOwners>My Company, Inc.</license.copyrightOwners>
 	</properties>
