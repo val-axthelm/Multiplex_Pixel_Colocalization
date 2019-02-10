@@ -9,21 +9,23 @@ import ij.process.*;
 public class Multiplex_Pixel_Colocalization_ implements PlugIn 
 {
   static String title = "Multiplex Pixel Colocalization";
-  static final int SCALE=0;
+  static final int SCALE = 0;
+  static final int validChannelMinCount = 2;
+  static final int validChannelMaxCount = 6;
+
+
   static int operation = SCALE;
   static double f = 255;
   static double k1 = 50;
   static double k2 = 50;
   static double r = 50;
   static boolean createWindow = false;
-  int[] wList;
-  private String[] titles;
-  int i1Index;
-  int i2Index;
   ImagePlus i1;
   ImagePlus i2;
   ImagePlus[] image = new ImagePlus[4];
-  ImageStack rgb; int w,h,d; boolean delete;
+  ImageStack rgb; 
+  int w,h,d; 
+  boolean delete;
   static int  R=0;
   static int  G=1;
   static int  B=2;
@@ -31,31 +33,33 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
 
   public void run(String arg) 
   {
+    /* Check start conditions */
     if (IJ.versionLessThan("1.27w")) 
     {
       return;
     }
-    wList = WindowManager.getIDList();
-    if ((wList==null) || (wList.length<2)) 
+
+    /* Get the number of channels to analyze, and error check the input */
+    int[] openWindowList = WindowManager.getIDList();
+    if (openWindowList == null)
     {
-      IJ.showMessage(title, "Please have the number of pictures open you would like to use");
+      IJ.showMessage(title, "ERR: Please open all channels and images you would like to analyze.");
       return;
     }
 
-    //Get Image Title Options
-    titles = new String[wList.length];
-    for (int i=0; i<wList.length; i++) 
+    int channelCount = returnChannelCount();
+    if (channelCount == 0)
     {
-      ImagePlus imp = WindowManager.getImage(wList[i]);
-      if (imp!=null) 
-      {
-        titles[i] = imp.getTitle();
-      } else {
-        titles[i] = "";
-      }
+      return;
     }
-
-    if (!showDialog()) 
+    if (openWindowList.length < channelCount)
+    {
+      IJ.showMessage(title, "ERR: Please open all channels and images you would like to analyze.");
+      return;
+    }
+ 
+    /*Get info on channels to analyze*/
+    if (!showDialog(openWindowList, channelCount)) 
     {
       return; 
     }
@@ -86,9 +90,51 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       CloseUsedStacks(delete);
     }    
   }
-
-  public boolean showDialog() 
+  
+  public String[] getImageTitles(int[] openWindowList)
   {
+    String[] titles = new String[openWindowList.length];
+    for (int i=0; i<openWindowList.length; i++) 
+    {
+      ImagePlus imp = WindowManager.getImage(openWindowList[i]);
+      if (imp!=null) 
+      {
+        titles[i] = imp.getTitle();
+      } else {
+        titles[i] = "";
+      }
+    }
+    return titles;
+  }
+
+  public int returnChannelCount()
+  {
+    double count = 0; 
+    GenericDialog gd = new GenericDialog(title);
+    gd.addMessage("Please make sure all channels you want to analyze are open.");
+    gd.addNumericField("Channel Count(2-6):", 2, 0);
+    gd.setCancelLabel("Exit");
+    gd.showDialog();
+    if (gd.wasCanceled()) 
+    {
+      return (int)0;
+    }
+    count = gd.getNextNumber();
+    if ((Double.isNaN(count)) || 
+        (count < validChannelMinCount) || 
+        (count > validChannelMaxCount) ||
+        (count != Math.ceil(count)))
+    {
+      IJ.showMessage(title, "ERR: Channel Count must be an integer between " + Integer.toString(validChannelMinCount) 
+        + " and " + Integer.toString(validChannelMaxCount) + "  Count Entered: " + Double.toString(count));
+      return (int)0;
+    }
+    return (int)count;
+  }
+
+  public boolean showDialog(int[] openWindowList, int channelCount) 
+  {
+    String[] titles = getImageTitles(openWindowList);
     GenericDialog gd = new GenericDialog(title);
     gd.addChoice("Channel_1 (red):", titles, titles[0]);
     gd.addChoice("Channel_2 (green):", titles, titles[1]);
@@ -111,13 +157,12 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     k2 = gd.getNextNumber();
     f = gd.getNextNumber();
     createWindow = gd.getNextBoolean();
-    i1 = WindowManager.getImage(wList[i1Index]);
-    i2 = WindowManager.getImage(wList[i2Index]);
-    image[R] =  WindowManager.getImage(wList[i1Index]);
-    image[G] =  WindowManager.getImage(wList[i2Index]);
-    int d1 = i1.getStackSize();
-    int d2 = i2.getStackSize();
-    if (d2==1 && d1>1) 
+    i1 = WindowManager.getImage(openWindowList[i1Index]);
+    i2 = WindowManager.getImage(openWindowList[i2Index]);
+    image[R] =  WindowManager.getImage(openWindowList[i1Index]);
+    image[G] =  WindowManager.getImage(openWindowList[i2Index]);
+    
+    if ((i2.getStackSize()==1) && (i1.getStackSize()>1)) 
     {
       IJ.showMessage(title, "If i2 is not a stack then i1 must also not be a stack.");
       return false;
