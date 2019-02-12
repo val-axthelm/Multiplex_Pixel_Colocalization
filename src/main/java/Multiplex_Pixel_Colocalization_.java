@@ -64,6 +64,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     {
       return; 
     }
+    outputImage = inputImages[0].duplicate();
 
     calculateColocolization(channelCount);
     outputImage.show();
@@ -207,7 +208,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     boolean[] pixelLit = new boolean[channelCount + 1];
     ImageProcessor [] imageProcessor = new ImageProcessor[channelCount + 1];
     ImageStack[] stack = new ImageStack[channelCount + 1];
-    float[][] ctable = new float[channelCount][];
+    float[][] ctable = new float[channelCount + 1][];
  
     //Grab information for each channel
     for(int i=0; i<channelCount; i++)
@@ -216,6 +217,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       ctable[i] = inputImages[i].getCalibration().getCTable();
     }
     stack[channelCount] = outputImage.getStack();
+    ctable[channelCount] = outputImage.getCalibration().getCTable();
 
 
     for (int n=1; n<=stackSize; n++) 
@@ -223,10 +225,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       for(int i=0; i<(channelCount+1); i++)
       {
         imageProcessor[i] = stack[i].getProcessor(n);
-        if(i != channelCount)
-        {
-          imageProcessor[i].setCalibrationTable(ctable[i]);
-        }
+        imageProcessor[i].setCalibrationTable(ctable[i]);
       }
 
       for (int x=0; x<width; x++) 
