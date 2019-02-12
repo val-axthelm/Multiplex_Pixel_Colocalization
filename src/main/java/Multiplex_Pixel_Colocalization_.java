@@ -12,20 +12,17 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
   static final int SCALE = 0;
   static final int validChannelMinCount = 2;
   static final int validChannelMaxCount = 6;
+  static final String channelColor [] = {"Red", "Green", "Blue", "Yellow", "Orange"};
 
 
-  static int operation = SCALE;
-  static double f = 255;
-  static double k1 = 50;
-  static double k2 = 50;
-  static double r = 50;
-  static boolean createWindow = false;
-  ImagePlus i1;
-  ImagePlus i2;
-  ImagePlus[] image = new ImagePlus[4];
-  ImageStack rgb; 
-  int w,h,d; 
-  boolean delete;
+  double[] channelThreshold;
+  
+  ImagePlus[] inputImages;
+  ImagePlus outputImage;
+  ImageStack outputImageStack; 
+
+
+  int width = 0, height = 0, stackSize = 0; 
   static int  R=0;
   static int  G=1;
   static int  B=2;
@@ -33,6 +30,10 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
 
   public void run(String arg) 
   {
+    int[] openWindowList = null; //List of all open windows
+    int channelCount = 0; //# of channels user wants to analyze
+    String[] imageTitleList = null;
+    
     /* Check start conditions */
     if (IJ.versionLessThan("1.27w")) 
     {
@@ -40,58 +41,39 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     }
 
     /* Get the number of channels to analyze, and error check the input */
-    int[] openWindowList = WindowManager.getIDList();
+    openWindowList = WindowManager.getIDList();
     if (openWindowList == null)
     {
       IJ.showMessage(title, "ERR: Please open all channels and images you would like to analyze.");
       return;
     }
-
-    int channelCount = returnChannelCount();
+    imageTitleList = getImageOptions(openWindowList);
+    channelCount = returnChannelCount(imageTitleList.length);
     if (channelCount == 0)
     {
       return;
     }
-    if (openWindowList.length < channelCount)
-    {
-      IJ.showMessage(title, "ERR: Please open all channels and images you would like to analyze.");
-      return;
-    }
  
+    /* Set up arrays based on channels selected by user*/
+    inputImages = new ImagePlus[channelCount];
+    channelThreshold = new double[channelCount];
+    
+    
     /*Get info on channels to analyze*/
-    if (!showDialog(openWindowList, channelCount)) 
+    if (!getChannels(openWindowList, channelCount)) 
     {
       return; 
     }
 
-    long start = System.currentTimeMillis();
-    boolean calibrated = i1.getCalibration().calibrated() || i2.getCalibration().calibrated();
-    if (calibrated) 
-    {
-      createWindow = true;
-    }
-
-    i2 = duplicateImage(i2, calibrated);
-    if (createWindow) 
-    {
-      i2.show();
-      if (i2==null)
-      {
-        IJ.showMessage(title, "Out of memory"); 
-        return;
-      }
-    } 
-    calculate(i1, i2, k1, k2 , r, f );
-    IJ.showStatus(IJ.d2s((System.currentTimeMillis()-start)/1000.0, 2)+" seconds");
-    if (CheckStacks()) 
-    {
-      CombineStacks(delete);
-      DisplayResult();
-      CloseUsedStacks(delete);
-    }    
+    calculateColocolization(channelCount);
+    outputImage.show();
   }
   
-  public String[] getImageTitles(int[] openWindowList)
+  /*
+   * This function is sent the openWindowList and creates 
+   * a list of strings to return using only image names.
+   * */
+  public String[] getImageOptions(int[] openWindowList)
   {
     String[] titles = new String[openWindowList.length];
     for (int i=0; i<openWindowList.length; i++) 
@@ -107,7 +89,16 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     return titles;
   }
 
-  public int returnChannelCount()
+
+  /*
+   * This function prompts the user to enter the channel count
+   * that they would like to analyze. It validates the number is 
+   * between the minimum and maximum # of channels this plugin 
+   * can analyze and returns the value as an int.
+   * It also verifies correct number of image windows are open. 
+   * Return: # of channels to analyze, 0 on ERR or Exit
+   * */
+  public int returnChannelCount(int imagesOpen)
   {
     double count = 0; 
     GenericDialog gd = new GenericDialog(title);
@@ -120,8 +111,18 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       return (int)0;
     }
     count = gd.getNextNumber();
-    if ((Double.isNaN(count)) || 
-        (count < validChannelMinCount) || 
+    if (Double.isNaN(count))
+    {
+      IJ.showMessage(title, "ERR: Please enter a valid integer between " + Integer.toString(validChannelMinCount) 
+      + " and " + Integer.toString(validChannelMaxCount));
+      return (int)0;
+    }
+    if (count > imagesOpen)
+    {
+      IJ.showMessage(title, "Please make sure all channels you want to analyze are open");
+      return (int)0;
+    }
+    if ((count < validChannelMinCount) || 
         (count > validChannelMaxCount) ||
         (count != Math.ceil(count)))
     {
@@ -132,262 +133,118 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     return (int)count;
   }
 
-  public boolean showDialog(int[] openWindowList, int channelCount) 
+  /*
+   * This will get the list of relevant channel names from the user
+   * and validate they are the same size, before returning true or false
+   * based on success or failure
+   * */
+  
+  public boolean getChannels(int[] openWindowList, int channelCount) 
   {
-    String[] titles = getImageTitles(openWindowList);
+    String[] imagetitleoptions = getImageOptions(openWindowList);
     GenericDialog gd = new GenericDialog(title);
-    gd.addChoice("Channel_1 (red):", titles, titles[0]);
-    gd.addChoice("Channel_2 (green):", titles, titles[1]);
-    gd.addMessage(" ");
-    gd.addNumericField("Ratio (0-100%):", r, 1);
-    gd.addNumericField("Threshold_channel_1 (0-255):", k1, 1);
-    gd.addNumericField("Threshold_channel_2 (0-255):", k2, 1);
-    gd.addMessage(" ");
-    gd.addNumericField("Display value (0-255):", f, 1);
-    gd.addCheckbox("Colocalizated points 8-bit", createWindow);
+    for(int i = 0; i < channelCount; i++) 
+    {
+      String option = "Channel #" + Integer.toString(i) + "(" + channelColor[i] +"): ";
+      gd.addChoice(option, imagetitleoptions, imagetitleoptions[i]);
+      gd.addNumericField("Channel Threshold Value (0-255):", 50, 1);
+      gd.addMessage(" ");
+    }
     gd.showDialog();
     if (gd.wasCanceled()) 
     {
       return false;
     }
-    int i1Index = gd.getNextChoiceIndex();
-    int i2Index = gd.getNextChoiceIndex();
-    r = gd.getNextNumber();
-    k1 = gd.getNextNumber();
-    k2 = gd.getNextNumber();
-    f = gd.getNextNumber();
-    createWindow = gd.getNextBoolean();
-    i1 = WindowManager.getImage(openWindowList[i1Index]);
-    i2 = WindowManager.getImage(openWindowList[i2Index]);
-    image[R] =  WindowManager.getImage(openWindowList[i1Index]);
-    image[G] =  WindowManager.getImage(openWindowList[i2Index]);
     
-    if ((i2.getStackSize()==1) && (i1.getStackSize()>1)) 
+    int[] imageIndex = new int[channelCount];
+    for(int i = 0; i < channelCount; i++) 
     {
-      IJ.showMessage(title, "If i2 is not a stack then i1 must also not be a stack.");
-      return false;
+      imageIndex[i] = gd.getNextChoiceIndex();
+      channelThreshold[i] = gd.getNextNumber();
+      inputImages[i] = WindowManager.getImage(openWindowList[imageIndex[i]]);
+  
+      /*Check images for consistent sizing*/
+      if (i == 0)
+      {
+        stackSize = inputImages[i].getStackSize();
+        height = inputImages[i].getHeight();
+        width = inputImages[i].getWidth();
+        if (inputImages[i].getType()!= ImagePlus.GRAY8)
+        {
+          IJ.showMessage(title, "Must be Gray8 type");
+          return false;
+        }
+      } 
+      else 
+      {
+        int newstackSize = inputImages[i].getStackSize();
+        int newheight = inputImages[i].getHeight();
+        int newwidth = inputImages[i].getWidth();
+        if((stackSize != newstackSize) || (height != newheight) || (width != newwidth))
+        {
+          String imagesize = "stack:" + Integer.toString(stackSize) +
+                             " height:" + Integer.toString(height) +
+                             " width:"+ Integer.toString(stackSize) +
+                             " new stack:" + Integer.toString(newstackSize) +
+                             " new height:" + Integer.toString(newheight) +
+                             " new width:"+ Integer.toString(newstackSize) +
+                             " Image Number: " + Integer.toString(i);
+          IJ.showMessage(title, "ERR: Image sizes must be the same" + imagesize);
+          return false;
+        }
+        if (inputImages[i].getType()!= ImagePlus.GRAY8)
+        {
+          IJ.showMessage(title, "Must be Gray8 type");
+          return false;
+        }
+      }
     }
     return true;
   }
 
-  public void calculate(ImagePlus i1, ImagePlus i2, double k1, double k2 , double r ,double f) 
+  public void calculateColocolization(int channelCount)
   {
-    double v1, v2;
-    int width  = i1.getWidth();
-    int height = i1.getHeight();
-    ImageProcessor ip1, ip2;
-    int slices1 = i1.getStackSize();
-    int slices2 = i2.getStackSize();
-    float[] ctable1 = i1.getCalibration().getCTable();
-    float[] ctable2 = i2.getCalibration().getCTable();
-    ImageStack stack1 = i1.getStack();
-    ImageStack stack2 = i2.getStack();
-    int currentSlice = i2.getCurrentSlice();
-
-    for (int n=1; n<=slices2; n++) 
+    boolean[] pixelLit = new boolean[channelCount + 1];
+    ImageProcessor [] imageProcessor = new ImageProcessor[channelCount + 1];
+    ImageStack[] stack = new ImageStack[channelCount + 1];
+    float[][] ctable = new float[channelCount][];
+ 
+    //Grab information for each channel
+    for(int i=0; i<channelCount; i++)
     {
-      ip1 = stack1.getProcessor(n<=slices1?n:slices1);
-      ip2 = stack2.getProcessor(n);
-      ip1.setCalibrationTable(ctable1);
-      ip2.setCalibrationTable(ctable2);
+      stack[i] = inputImages[i].getStack();
+      ctable[i] = inputImages[i].getCalibration().getCTable();
+    }
+    stack[channelCount] = outputImage.getStack();
+
+
+    for (int n=1; n<=stackSize; n++) 
+    {
+      for(int i=0; i<(channelCount+1); i++)
+      {
+        imageProcessor[i] = stack[i].getProcessor(n);
+        if(i != channelCount)
+        {
+          imageProcessor[i].setCalibrationTable(ctable[i]);
+        }
+      }
+
       for (int x=0; x<width; x++) 
       {
         for (int y=0; y<height; y++) 
         {
-          v1 = ip1.getPixelValue(x,y);
-          v2 = ip2.getPixelValue(x,y);
-          switch (operation) 
+          pixelLit[channelCount] = true;
+          for(int i=0; i<channelCount; i++)
           {
-            case SCALE: v2 =v1>k1&v2>k2&v1/v2*100>r&v2/v1*100>r?f:0.0 ;
-          }
-          ip2.putPixelValue(x, y, v2);
+            pixelLit[i] = imageProcessor[i].getPixel(x,y) > channelThreshold[i];
+            pixelLit[channelCount] = pixelLit[i] & pixelLit[channelCount];
+          }          
+          imageProcessor[channelCount].putPixelValue(x, y, pixelLit[channelCount]?255:0);
         }   
       }   
-      if (n==currentSlice) 
-      {
-        i2.getProcessor().resetMinAndMax();
-        i2.updateAndDraw();
-      }     
-      IJ.showProgress((double)n/slices2);
-      IJ.showStatus(n+"/"+slices2);
+      IJ.showProgress((double)n/stackSize);
+      IJ.showStatus(n+"/"+stackSize);
     }
   }
 
-  ImagePlus duplicateImage(ImagePlus img1, boolean calibrated) 
-  {
-    ImageStack stack1 = img1.getStack();
-    int width = stack1.getWidth();
-    int height = stack1.getHeight();
-    int n = stack1.getSize();
-    ImageStack stack2 = img1.createEmptyStack();
-    float[] ctable = img1.getCalibration().getCTable();
-    try 
-    {
-      for (int i=1; i<=n; i++) 
-      {
-        ImageProcessor ip1 = stack1.getProcessor(i);
-        ImageProcessor ip2 = ip1.duplicate(); 
-        if (calibrated) 
-        {
-          ip2.setCalibrationTable(ctable);
-          ip2 = ip2.convertToFloat();
-        }
-        stack2.addSlice(stack1.getSliceLabel(i), ip2);
-      }
-    }
-    catch(OutOfMemoryError e) 
-    {
-      stack2.trim();
-      stack2 = null;
-      return null;
-    }
-    ImagePlus img2 =  new ImagePlus("Colocalizated points (8-bit) ", stack2);
-    image[3] = img2;
-    return img2;
-  } 
-
-  public boolean CheckStacks()
-  {
-    int stackSize, width, height, type, img=0;
-    while (image[img]==null) 
-    { 
-      img++;
-    }
-    if(img>=4) IJ.error("an image must exist");
-    d=stackSize = image[img].getStackSize();
-    h=height = image[img].getHeight();
-    w=width = image[img].getWidth();
-    type = image[img].getType();
-    if (stackSize <1 ) 
-    {
-      IJ.error("require stackSize>0");
-      return false;
-    }
-    if (type != ImagePlus.GRAY8) 
-    {
-      IJ.error("require 8-bit grayscale");
-      return false;
-    }
-    if (width <1 ) 
-    {
-      IJ.error("require width>0");
-      return false;
-    }
-    if (height <1 ) 
-    {
-      IJ.error("require height>0");
-      return false;
-    }
-    for (int ii=0; ii<4; ii++)
-    {
-      if(image[ii]!=null)
-      {
-        if(stackSize!=image[ii].getStackSize()) 
-        {
-          IJ.error("stackSize mismatch");
-          return false;
-        }
-        if(height!=image[ii].getHeight())
-        {
-          IJ.error("height mismatch");
-          return false;
-        }
-        if(width!=image[ii].getWidth()) 
-        {
-          IJ.error("width mismatch");
-          return false;
-        }
-        if(type!=image[ii].getType()) 
-        {
-          IJ.error("type mismatch");
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
-  public void CombineStacks(boolean remove)
-  {
-    rgb = new ImageStack(w, h);
-    int inc = d/10; /* for showing progress */
-    int numpels = w*h;
-    if (inc<1) inc = 1;
-    ColorProcessor cp;
-    byte[] GS,rS,gS,bS; /* source pointers */
-    byte[] rPels=new byte[w*h];	
-    byte[] gPels=new byte[w*h];
-    byte[] bPels=new byte[w*h];
-    byte[] blank=new byte[w*h];
-    try
-    {
-      for (int ss=1; ss<=d; ss++) /* i is the image slice among d slices per stack */
-      {
-        cp = new ColorProcessor(w, h); /* MAY NEED TO DO THIS INSIDE STACK BUILDING LOOP */		
-        GS = (byte[])((image[g]!=null) ? image[g].getStack().getPixels(remove?1:ss) : null) ;
-        rS = (byte[])((image[R]!=null) ? image[R].getStack().getPixels(remove?1:ss) : null) ;
-        gS = (byte[])((image[G]!=null) ? image[G].getStack().getPixels(remove?1:ss) : null) ;
-        bS= (byte[])((image[B]!=null) ? image[B].getStack().getPixels(remove?1:ss) : null) ;
-        if (GS!=null)
-        {
-          for(int pp=0; pp<numpels; pp++)
-          {
-            rPels[pp] = (byte)((rS!=null) ?(GS[pp])|(rS[pp]) : GS[pp]);
-            gPels[pp] = (byte)((gS!=null) ? (GS[pp])|(gS[pp]) : GS[pp]);
-            bPels[pp] = (byte)((bS!=null) ? (GS[pp])|(bS[pp]) : GS[pp]);
-          }
-          cp.setRGB(rPels, gPels, bPels);
-        }
-        else
-        {
-          cp.setRGB(rS=(rS!=null)?rS:blank, gS=(gS!=null)?gS:blank, bS=(bS!=null)?bS:blank);	
-        }
-        rgb.addSlice(null, cp);
-        if(remove)
-        {
-          for(int ii=0; ii<4;ii++)
-          {
-            if(image[ii]!=null) 
-            {
-              image[ii].getStack().deleteSlice(1);
-            }
-          }
-          if ((ss%inc) == 0)
-          {
-            IJ.showProgress((double)ss/d);
-          }
-        }
-      }
-      IJ.showProgress(1.0);
-    } 
-    catch(OutOfMemoryError o) 
-    {
-      IJ.outOfMemory("MergeStacks");
-      IJ.showProgress(1.0);
-    }
-  }
-
-  public void CloseUsedStacks(boolean close)
-  {
-    if (close) 
-    {
-      for (int i=0; i<4; i++) 
-      {
-        if (image[i]!=null) 
-        {
-          image[i].changes = false;
-          ImageWindow win = image[i].getWindow();
-          if (win!=null) 
-          {
-            win.close();
-          }
-        }
-      }
-    }
-  }
-
-  public void DisplayResult()
-  {
-    new ImagePlus("Colocalizated points (RGB) ", rgb).show();
-  }
 }
