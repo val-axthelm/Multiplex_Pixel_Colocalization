@@ -3,35 +3,34 @@ import ij.*;
 import ij.plugin.*;
 import ij.gui.*;
 import ij.process.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.PrintWriter;
 
 
 
 public class Multiplex_Pixel_Colocalization_ implements PlugIn 
 {
   static String title = "Multiplex Pixel Colocalization";
-  static final int SCALE = 0;
   static final int validChannelMinCount = 2;
-  static final int validChannelMaxCount = 6;
+  static final int validChannelMaxCount = 8;
   static final String channelColor [] = {"Red", "Green", "Blue", "Yellow", "Orange"};
+  static final String POSITIVE = "(+)";
+  static final String NEGATIVE = "(-)";
 
-
-  double[] channelThreshold;
-  
-  ImagePlus[] inputImages;
+  int channelCount = 0;
+  double[] channelThreshold = null;
+  String[] channelTitles = null;
+  ImagePlus[] inputImages = null;
   ImagePlus outputImage;
   ImageStack outputImageStack; 
-
-
-  int width = 0, height = 0, stackSize = 0; 
-  static int  R=0;
-  static int  G=1;
-  static int  B=2;
-  static int  g=3;
+  int[] colocalizationCounts = null; //count by picture/stack
+  int width = 0, height = 0, stackSize = 0;
+  String outputfilename = "colocalizationCounts.csv";
 
   public void run(String arg) 
   {
     int[] openWindowList = null; //List of all open windows
-    int channelCount = 0; //# of channels user wants to analyze
     String[] imageTitleList = null;
     
     /* Check start conditions */
@@ -57,24 +56,32 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     /* Set up arrays based on channels selected by user*/
     inputImages = new ImagePlus[channelCount];
     channelThreshold = new double[channelCount];
+    //There are 2^(#images) options for overlap
+    colocalizationCounts = new int[(int)Math.pow(2, channelCount)]; 
     
     
     /*Get info on channels to analyze*/
-    if (!getChannels(openWindowList, channelCount)) 
+    if (!getChannels(openWindowList)) 
     {
       return; 
     }
     outputImage = inputImages[0].duplicate();
 
-    calculateColocolization(channelCount);
+    calculateColocolization();
     outputImage.show();
+    if(!saveColocalizationCounts())
+    {
+      IJ.showMessage("ERR: Failed to save CSV file");
+      return;
+    }
+    IJ.showMessage(title, "Analysis Successful! Congrats! And best of luck saving the world :)");
   }
   
   /*
    * This function is sent the openWindowList and creates 
    * a list of strings to return using only image names.
    * */
-  public String[] getImageOptions(int[] openWindowList)
+  private String[] getImageOptions(int[] openWindowList)
   {
     String[] titles = new String[openWindowList.length];
     for (int i=0; i<openWindowList.length; i++) 
@@ -99,7 +106,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
    * It also verifies correct number of image windows are open. 
    * Return: # of channels to analyze, 0 on ERR or Exit
    * */
-  public int returnChannelCount(int imagesOpen)
+  private int returnChannelCount(int imagesOpen)
   {
     double count = 0; 
     GenericDialog gd = new GenericDialog(title);
@@ -114,7 +121,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     count = gd.getNextNumber();
     if (Double.isNaN(count))
     {
-      IJ.showMessage(title, "ERR: Please enter a valid integer between " + Integer.toString(validChannelMinCount) 
+      IJ.showMessage(title, "ERR: Please enter a valid integer between (including):" + Integer.toString(validChannelMinCount) 
       + " and " + Integer.toString(validChannelMaxCount));
       return (int)0;
     }
@@ -140,7 +147,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
    * based on success or failure
    * */
   
-  public boolean getChannels(int[] openWindowList, int channelCount) 
+  private boolean getChannels(int[] openWindowList) 
   {
     String[] imagetitleoptions = getImageOptions(openWindowList);
     GenericDialog gd = new GenericDialog(title);
@@ -203,9 +210,18 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     return true;
   }
 
-  public void calculateColocolization(int channelCount)
+  
+  /*
+   * This will step through all stack/image options
+   * And tally colocalization counts for each channel combo option
+   * This info is stored in colocalizationCounts array.
+   * if you treat the colocalizationIndex like binary, each bit
+   * represents a channel. so we shift in each channel true/false 
+   * to create the appropriate colocalization option 
+   * */
+  private void calculateColocolization()
   {
-    boolean[] pixelLit = new boolean[channelCount + 1];
+    int[] pixelLit = new int[channelCount + 1];
     ImageProcessor [] imageProcessor = new ImageProcessor[channelCount + 1];
     ImageStack[] stack = new ImageStack[channelCount + 1];
     float[][] ctable = new float[channelCount + 1][];
@@ -227,23 +243,73 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
         imageProcessor[i] = stack[i].getProcessor(n);
         imageProcessor[i].setCalibrationTable(ctable[i]);
       }
-
+      
       for (int x=0; x<width; x++) 
       {
         for (int y=0; y<height; y++) 
         {
-          pixelLit[channelCount] = true;
+          //Pixel Analysis 
+          int colocalizationIndex = 0x0; //Allows selection of right count to increase.
+          pixelLit[channelCount] = 1;
+
           for(int i=0; i<channelCount; i++)
           {
-            pixelLit[i] = imageProcessor[i].getPixel(x,y) > channelThreshold[i];
+            pixelLit[i] = (imageProcessor[i].getPixel(x,y) > channelThreshold[i])?1:0;
             pixelLit[channelCount] = pixelLit[i] & pixelLit[channelCount];
+            colocalizationIndex = (colocalizationIndex << 1) + pixelLit[i]; 
           }          
-          imageProcessor[channelCount].putPixelValue(x, y, pixelLit[channelCount]?255:0);
+          imageProcessor[channelCount].putPixelValue(x, y, (pixelLit[channelCount]==1)?255:0);
+          colocalizationCounts[colocalizationIndex]++;
         }   
       }   
       IJ.showProgress((double)n/stackSize);
       IJ.showStatus(n+"/"+stackSize);
     }
+  }
+  
+  
+  private Boolean saveColocalizationCounts()
+  {
+    String toPrint = "";
+    int[] bitmasks = new int[channelCount];
+    
+    /*Create Bitmasks for each channel*/
+    for(int i=0; i<channelCount; i++)
+    {
+      int shift = 1; 
+      //toPrint = toPrint + channelTitles[i] + ",";
+      toPrint = toPrint + Integer.toString(i) + ",";
+      bitmasks[i] = shift << (channelCount - 1 - i);
+    }
+    toPrint = toPrint + "pixel count\n";
+    
+    for(int i=0; i < colocalizationCounts.length; i++)
+    {
+      for(int j=0; j<channelCount; j++)
+      {
+        if((i & bitmasks[j]) != 0)
+        {
+          toPrint = toPrint + POSITIVE + ",";
+        } 
+        else 
+        {
+          toPrint = toPrint + NEGATIVE + ",";
+        }
+      }
+      toPrint = toPrint + Integer.toString(colocalizationCounts[i]) + "\n";
+    }
+    IJ.showMessage(title, "Saving File");
+    PrintWriter pw = null;
+    try {
+        pw = new PrintWriter(new File("/Users/axthelm/Documents/NewData.csv"));
+    } catch (FileNotFoundException e) {
+        e.printStackTrace();
+        IJ.showMessage(title, e.toString());
+        return false;
+    }
+    pw.write(toPrint);
+    pw.close();
+    return true;
   }
 
 }
