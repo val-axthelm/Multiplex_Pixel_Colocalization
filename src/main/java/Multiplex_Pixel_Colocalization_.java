@@ -1,6 +1,7 @@
 
 import ij.*;
 import ij.plugin.*;
+import ij.plugin.frame.RoiManager;
 import ij.gui.*;
 import ij.process.*;
 import java.io.File;
@@ -14,7 +15,6 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
   static String title = "Multiplex Pixel Colocalization";
   static final int validChannelMinCount = 2;
   static final int validChannelMaxCount = 8;
-  static final String channelColor [] = {"Red", "Green", "Blue", "Yellow", "Orange"};
   static final String POSITIVE = "(+)";
   static final String NEGATIVE = "(-)";
 
@@ -153,7 +153,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     GenericDialog gd = new GenericDialog(title);
     for(int i = 0; i < channelCount; i++) 
     {
-      String option = "Channel #" + Integer.toString(i) + "(" + channelColor[i] +"): ";
+      String option = "Channel #" + Integer.toString(i) + ": ";
       gd.addChoice(option, imagetitleoptions, imagetitleoptions[i]);
       gd.addNumericField("Channel Threshold Value (0-255):", 50, 1);
       gd.addMessage(" ");
@@ -211,6 +211,17 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
   }
 
   
+  private boolean doesthiscontain(Roi [] rois, int x, int y)
+  {
+     for (int i = 0; i < rois.length; i++)
+     {
+       if(rois[i].contains(x, y))
+       {
+         return true;
+       }
+     }
+    return false;
+  }
   /*
    * This will step through all stack/image options
    * And tally colocalization counts for each channel combo option
@@ -225,6 +236,19 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     ImageProcessor [] imageProcessor = new ImageProcessor[channelCount + 1];
     ImageStack[] stack = new ImageStack[channelCount + 1];
     float[][] ctable = new float[channelCount + 1][];
+    RoiManager roiMng = RoiManager.getRoiManager();
+    
+    WaitForUserDialog wd_roid = new WaitForUserDialog("USER ROI SELECT", "Select Rois Please");
+    wd_roid.show();
+    Roi[ ] rois = roiMng.getSelectedRoisAsArray();
+    if (rois.length == 0) 
+    {
+      IJ.showMessage(title,"NO ROI IN USE. Continue");
+    } else
+    {
+     IJ.showMessage(title, "Using Rois = " + Integer.toString(rois.length));
+    }
+
  
     //Grab information for each channel
     for(int i=0; i<channelCount; i++)
@@ -232,13 +256,15 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       stack[i] = inputImages[i].getStack();
       ctable[i] = inputImages[i].getCalibration().getCTable();
     }
+    
+
     stack[channelCount] = outputImage.getStack();
     ctable[channelCount] = outputImage.getCalibration().getCTable();
 
 
     for (int n=1; n<=stackSize; n++) 
     {
-      for(int i=0; i<(channelCount+1); i++)
+      for (int i=0; i<(channelCount+1); i++)
       {
         imageProcessor[i] = stack[i].getProcessor(n);
         imageProcessor[i].setCalibrationTable(ctable[i]);
@@ -248,6 +274,8 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       {
         for (int y=0; y<height; y++) 
         {
+          if ((rois.length == 0) || ((rois.length != 0) && doesthiscontain(rois,x,y)))
+          {
           //Pixel Analysis 
           int colocalizationIndex = 0x0; //Allows selection of right count to increase.
           pixelLit[channelCount] = 1;
@@ -260,8 +288,13 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
           }          
           imageProcessor[channelCount].putPixelValue(x, y, (pixelLit[channelCount]==1)?255:0);
           colocalizationCounts[colocalizationIndex]++;
-        }   
+        }
+        else 
+        {
+          imageProcessor[channelCount].putPixelValue(x, y, 0);
+        }
       }   
+      }
       IJ.showProgress((double)n/stackSize);
       IJ.showStatus(n+"/"+stackSize);
     }
@@ -301,7 +334,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     IJ.showMessage(title, "Saving File");
     PrintWriter pw = null;
     try {
-        pw = new PrintWriter(new File("/Users/axthelm/Documents/NewData.csv"));
+        pw = new PrintWriter(new File("C:/Users/Isaac/OneDrive - UW/Research- Kiem/Experimental Histopathology Requests/Slide Scanning-Analysis/Fluorescence/Multiplex IHC_GCs/AmFAR CD4CAR 6plex Images/NewData.csv"));
     } catch (FileNotFoundException e) {
         e.printStackTrace();
         IJ.showMessage(title, e.toString());
