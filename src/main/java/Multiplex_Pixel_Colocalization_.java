@@ -255,16 +255,16 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     
     ImageProcessor imageProcessor = inputImages[stampNumber].getProcessor();
 
-    for (int x=0; x<width; x++) 
+    for (int n=1; n<=sliceCount; n++) 
     {
-      for (int y=0; y<height; y++) 
+      inputImages[stampNumber].setSlice(n);
+      for (int x=0; x<width; x++) 
       {
-        if (roisContainPixel(rois,x,y) == false)
+        for (int y=0; y<height; y++) 
         {
-          /*Note slice numbers start at 1*/
-          for (int n=1; n<=sliceCount; n++) 
+          if (roisContainPixel(rois,x,y) == false)
           {
-            inputImages[stampNumber].setSlice(n);
+          /*Note slice numbers start at 1*/
             imageProcessor.putPixelValue(x, y, 0);
           }
         }
@@ -301,23 +301,34 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       imageProcessor[i] = inputImages[i].getProcessor();
     }
     
-    int [][]colocalizationIndex = new int[stampCount][sliceCount]; //Allows selection of right count to increase.
 
     for(int i=0; i<stampCount; i++)
     {
-      for(int n=1; n<=sliceCount; n++)
+      int [][]colocalizationIndex = new int[width][height]; //Allows selection of right count to increase.
+      for(int n=0; n<sliceCount; n++)
       {
-        inputImages[i].setSlice(n);
+        inputImages[i].setSlice(n+1);
         for (int x=0; x<width; x++) 
         {
           for (int y=0; y<height; y++) 
           {
             //Pixel Analysis 
-            int pixelLit = (imageProcessor[i].getPixel(x,y) > channelThresholds[i])?1:0;
-            colocalizationIndex[i][n] = (colocalizationIndex[i][n] << 1) + pixelLit; 
+            int pixelLit = (imageProcessor[i].getPixel(x,y) > channelThresholds[i]) ? 1:0;
+            colocalizationIndex[x][y] = (colocalizationIndex[x][y] << 1) + pixelLit; 
           }
         }
-        colocalizationCounts[i][colocalizationIndex[i][n]]++;
+      }
+      for (int x=0; x<width; x++) 
+      {
+        for (int y=0; y<height; y++) 
+        {
+          if((colocalizationIndex[x][y]) > comboOptions)
+          {
+            IJ.showMessage(title, "OUt of bounds: combo " + Integer.toString(comboOptions) + "  col " + Integer.toString(colocalizationIndex[x][y]));
+          } else {
+          (colocalizationCounts[i][colocalizationIndex[x][y]])++;
+          }
+        }
       }
     }
   }
@@ -363,7 +374,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     IJ.showMessage(title, "Saving File");
     PrintWriter pw = null;
     try {
-        pw = new PrintWriter(new File("C:/Users/Isaac/OneDrive - UW/Research- Kiem/Experimental Histopathology Requests/Slide Scanning-Analysis/Fluorescence/Multiplex IHC_GCs/AmFAR CD4CAR 6plex Images/NewData.csv"));
+        pw = new PrintWriter(new File("/Users/axthelm/Desktop/NewData.csv"));
     } catch (FileNotFoundException e) {
         e.printStackTrace();
         IJ.showMessage(title, e.toString());
