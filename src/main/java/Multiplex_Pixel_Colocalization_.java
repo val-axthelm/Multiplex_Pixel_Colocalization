@@ -26,6 +26,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
   int comboOptions = 0;
   int[][] colocalizationCounts = null; //count by picture/stack
   int width = 0, height = 0, sliceCount = 0;
+  String outputfilepath = "/Users/axthelm/Desktop/";
   String outputfilename = "colocalizationCounts.csv";
 
   public void run(String arg) 
@@ -99,24 +100,45 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
   private int returnStampCount()
   {
     double count = 0; 
-    GenericDialog gd = new GenericDialog(title);
-    gd.addMessage("This is the number of image stacks you would like to analyze together.");
-    gd.addNumericField("Image Stamp Count (whole number greater than zero):", 2, 0);
-    gd.setCancelLabel("Exit");
-    gd.showDialog();
-    if (gd.wasCanceled()) 
+    PrintWriter pw = null;
+
+    while(pw == null) 
     {
-      return (int)0;
+      GenericDialog gd = new GenericDialog(title);
+      gd.addMessage("This is the number of image stacks you would like to analyze together.");
+      gd.addNumericField("Image Stamp Count (whole number greater than zero):", 2, 0);
+      gd.addStringField("Output Filepath", outputfilepath);
+      gd.addStringField("Output Filename", outputfilename);
+      gd.setCancelLabel("Exit");
+      gd.showDialog();
+      if (gd.wasCanceled()) 
+      {
+        return (int)0;
+      }
+      count = gd.getNextNumber();
+      outputfilepath = gd.getNextString();
+      outputfilename = gd.getNextString();
+ 
+      if ((Double.isNaN(count)) || 
+          (count < 0) ||
+          (count != Math.ceil(count)))
+      {
+        IJ.showMessage(title, "ERR: Please enter a valid integer above zero:" + Integer.toString(validChannelMinCount) 
+        + " and " + Integer.toString(validChannelMaxCount));
+        return (int)0;
+      }
+
+      try 
+      {
+        pw = new PrintWriter(new File(outputfilepath + outputfilename));
+      } 
+      catch (FileNotFoundException e) 
+      {
+        IJ.showMessage(title, "ERR: Filepath does not exist. Please try again.");
+        pw = null;
+      }
     }
-    count = gd.getNextNumber();
-    if ((Double.isNaN(count)) || 
-        (count < 0) ||
-        (count != Math.ceil(count)))
-    {
-      IJ.showMessage(title, "ERR: Please enter a valid integer above zero:" + Integer.toString(validChannelMinCount) 
-      + " and " + Integer.toString(validChannelMaxCount));
-      return (int)0;
-    }
+    pw.close();
     return (int)count;
   }
 
@@ -189,6 +211,8 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     }
    return true;
   }
+
+  
 
   private boolean checkImageData(int i)
   {
@@ -348,7 +372,11 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       toPrint = toPrint + Integer.toString(i) + ",";
       bitmasks[i] = shift << (sliceCount - 1 - i);
     }
-    toPrint = toPrint + "pixel count\n";
+    for (int n=0; n < stampCount; n++)
+    {
+      toPrint = toPrint + inputImages[n].getTitle() + ',';
+    }
+    toPrint = toPrint + "\n";
     
     for(int i=0; i < comboOptions; i++)
     {
@@ -371,11 +399,13 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       }
       toPrint = toPrint + Integer.toString(sumTotal) + "\n";
     }
-    IJ.showMessage(title, "Saving File");
     PrintWriter pw = null;
-    try {
-        pw = new PrintWriter(new File("/Users/axthelm/Desktop/NewData.csv"));
-    } catch (FileNotFoundException e) {
+    try 
+    {
+        pw = new PrintWriter(new File(outputfilepath + outputfilename));
+    } 
+    catch (FileNotFoundException e) 
+    {
         e.printStackTrace();
         IJ.showMessage(title, e.toString());
         return false;
