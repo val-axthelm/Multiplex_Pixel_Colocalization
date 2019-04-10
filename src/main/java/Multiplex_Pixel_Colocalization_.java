@@ -240,7 +240,7 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
       int newSliceCount = inputImages[i].getStackSize();
       int newheight = inputImages[i].getHeight();
       int newwidth = inputImages[i].getWidth();
-      if((sliceCount != newSliceCount) || (height != newheight) || (width != newwidth))
+      if((sliceCount != newSliceCount) || (height == 0) || (width == 0))
       {
         String imagesize = "stack:" + Integer.toString(sliceCount) +
                            " height:" + Integer.toString(height) +
