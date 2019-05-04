@@ -25,8 +25,8 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
   double[] channelThresholds = null;
   int comboOptions = 0;
   int[][] colocalizationCounts = null; //count by picture/stack
-  int width = 0, height = 0, sliceCount = 0;
-  String outputfilepath = "/Users/axthelm/Desktop/";
+  int sliceCount = 0;
+  String outputfilepath = "C:\\Users\\Isaac\\Desktop\\";
   String outputfilename = "colocalizationCounts.csv";
 
   public void run(String arg) 
@@ -216,17 +216,18 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
 
   private boolean checkImageData(int i)
   {
+	int w = 0, h = 0;
     /*Check images for consistent sizing*/
     if (i == 0)
     {
       sliceCount = inputImages[i].getStackSize();
-      height = inputImages[i].getHeight();
-      width = inputImages[i].getWidth();
-      if((sliceCount == 0) || (height == 0) || (width == 0))
+      h = inputImages[i].getHeight();
+      w = inputImages[i].getWidth();
+      if((sliceCount == 0) || (h == 0) || (w == 0))
       {
         String imagesize = "slices::" + Integer.toString(sliceCount) +
-                           " height:" + Integer.toString(height) +
-                           " width:"+ Integer.toString(width);
+                           " height:" + Integer.toString(h) +
+                           " width:"+ Integer.toString(w);
         IJ.showMessage(title, "ERR: Image must exist. " + imagesize);
       }
       if (inputImages[i].getType()!= ImagePlus.GRAY8)
@@ -238,16 +239,16 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     else 
     {
       int newSliceCount = inputImages[i].getStackSize();
-      int newheight = inputImages[i].getHeight();
-      int newwidth = inputImages[i].getWidth();
-      if((sliceCount != newSliceCount) || (height == 0) || (width == 0))
+      int newHeight = inputImages[i].getHeight();
+      int newWidth = inputImages[i].getWidth();
+      if((sliceCount != newSliceCount) || (newHeight == 0) || (newWidth == 0))
       {
         String imagesize = "stack:" + Integer.toString(sliceCount) +
-                           " height:" + Integer.toString(height) +
-                           " width:"+ Integer.toString(width) +
+                           " height:" + Integer.toString(h) +
+                           " width:"+ Integer.toString(w) +
                            " new stack:" + Integer.toString(newSliceCount) +
-                           " new height:" + Integer.toString(newheight) +
-                           " new width:"+ Integer.toString(newwidth) +
+                           " new height:" + Integer.toString(newHeight) +
+                           " new width:"+ Integer.toString(newWidth) +
                            " Image Number: " + Integer.toString(i);
         IJ.showMessage(title, "ERR: Image sizes must be the same. " + imagesize);
         return false;
@@ -276,15 +277,16 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
     {
        IJ.showMessage(title, "Roi Count = " + Integer.toString(rois.length));
     }
-    
+    int nwidth = inputImages[stampNumber].getWidth();
+    int nheight = inputImages[stampNumber].getHeight();
     ImageProcessor imageProcessor = inputImages[stampNumber].getProcessor();
 
     for (int n=1; n<=sliceCount; n++) 
     {
       inputImages[stampNumber].setSlice(n);
-      for (int x=0; x<width; x++) 
+      for (int x=0; x<nwidth; x++) 
       {
-        for (int y=0; y<height; y++) 
+        for (int y=0; y<nheight; y++) 
         {
           if (roisContainPixel(rois,x,y) == false)
           {
@@ -328,13 +330,15 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
 
     for(int i=0; i<stampCount; i++)
     {
-      int [][]colocalizationIndex = new int[width][height]; //Allows selection of right count to increase.
+      int stampWidth = inputImages[i].getWidth();
+      int stampHeight = inputImages[i].getHeight();
+      int [][]colocalizationIndex = new int[stampWidth][stampHeight]; //Allows selection of right count to increase.
       for(int n=0; n<sliceCount; n++)
       {
         inputImages[i].setSlice(n+1);
-        for (int x=0; x<width; x++) 
+        for (int x=0; x<stampWidth; x++) 
         {
-          for (int y=0; y<height; y++) 
+          for (int y=0; y<stampHeight; y++) 
           {
             //Pixel Analysis 
             int pixelLit = (imageProcessor[i].getPixel(x,y) > channelThresholds[i]) ? 1:0;
@@ -342,9 +346,9 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
           }
         }
       }
-      for (int x=0; x<width; x++) 
+      for (int x=0; x<stampWidth; x++) 
       {
-        for (int y=0; y<height; y++) 
+        for (int y=0; y<stampHeight; y++) 
         {
           if((colocalizationIndex[x][y]) > comboOptions)
           {
