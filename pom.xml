@@ -13,10 +13,10 @@
 	</parent>
 
 	<groupId>com.mycompany</groupId>
-	<artifactId>Process_Pixels</artifactId>
+	<artifactId>Multiplex_Pixel_Colocalization</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
 
-	<name>Process Pixels</name>
+	<name>Multiplex_Pixel_Colocalization</name>
 	<description>A Maven project implementing an ImageJ 1.x plugin.</description>
 	<url>http://mycompany.com/imagej/process-pixels/</url>
 	<inceptionYear>2012</inceptionYear>
@@ -100,8 +100,8 @@
 	</ciManagement>
 
 	<properties>
-		<package-name>com.mycompany.imagej</package-name>
-		<main-class>com.mycompany.imagej.Process_Pixels</main-class>
+		<package-name>axthelm</package-name>
+		<main-class>Multiplex_Pixel_Colocalization</main-class>
 		<license.licenseName>bsd_2</license.licenseName>
 		<license.copyrightOwners>My Company, Inc.</license.copyrightOwners>
 	</properties>
