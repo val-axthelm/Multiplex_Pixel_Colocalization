@@ -31,13 +31,13 @@ public class Multiplex_Pixel_Colocalization_ implements PlugIn
 
   public void run(String arg) 
   {
-    /* Check start conditions, don't know if necessary */
+    /* Check start conditions */
     if (IJ.versionLessThan("1.27w")) 
     {
       return;
     }
 
-    /* How many image stacks will the user upload*/
+    /* How many image stacks the user upload*/
     stampCount = returnStampCount();
     if (stampCount == 0)
     {
